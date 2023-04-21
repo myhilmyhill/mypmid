@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.CommandLine;
+using System.Runtime.InteropServices;
 using System.Text;
 
 [DllImport("winmm", CharSet = CharSet.Auto)]
@@ -36,38 +37,54 @@ void Finally(bool debug = false)
     Console.WriteLine("");
 }
 
-const string alias = "a";
-string file = args.ElementAtOrDefault(0) ?? throw new ArgumentNullException("file");
-string? port = args.ElementAtOrDefault(1);
-bool debug = false;
-Console.CancelKeyPress += (_, _) =>
+var rootCommand = new RootCommand("My player for MIDI");
+var fileArgument = new Argument<string>(
+    name: "file",
+    description: "MIDI file");
+var portOption = new Option<string?>(
+    aliases: new[] { "--port", "-p" },
+    description: "MIDI out port (default: mapper)");
+var debugOption = new Option<bool>(
+    name: "--debug",
+    description: "Show mciSendString");
+rootCommand.AddArgument(fileArgument);
+rootCommand.AddOption(portOption);
+rootCommand.AddOption(debugOption);
+rootCommand.SetHandler((file, port, debug) =>
 {
-    Finally(debug);
-};
-
-try
-{
-    SendMciVoid($"open \"{file}\" alias {alias}", debug);
-    SendMciVoid($"set {alias} time format ms");
-    if (port != null)
+    const string alias = "a";
+    Console.CancelKeyPress += (_, _) =>
     {
-        SendMciVoid($"set {alias} port {port}", debug);
+        Finally(debug);
+    };
+
+    try
+    {
+        SendMciVoid($"open \"{file}\" alias {alias}", debug);
+        SendMciVoid($"set {alias} time format ms");
+        if (port != null)
+        {
+            SendMciVoid($"set {alias} port {port}", debug);
+        }
+
+        SendMciVoid($"play {alias}", debug);
+        var length = SendMci<double>($"status {alias} length", debug);
+        var currentPort = SendMci<string>($"status {alias} port", debug);
+
+        for (; ; )
+        {
+            var position = SendMci<double>($"status {alias} position", debug);
+            string mode = SendMci<string>($"status {alias} mode", debug);
+            Console.Write($"{mode} ({currentPort}) {TimeSpan.FromMilliseconds(position)} / {TimeSpan.FromMilliseconds(length)}\r");
+
+            if (position >= length) return;
+        }
+    }
+    finally
+    {
+        Finally(debug);
     }
 
-    SendMciVoid($"play {alias}", debug);
-    var length = SendMci<double>($"status {alias} length", debug);
-    var currentPort = SendMci<string>($"status {alias} port", debug);
-
-    for (; ; )
-    {
-        var position = SendMci<double>($"status {alias} position", debug);
-        string mode = SendMci<string>($"status {alias} mode", debug);
-        Console.Write($"{mode} ({currentPort}) {TimeSpan.FromMilliseconds(position)} / {TimeSpan.FromMilliseconds(length)}\r");
-
-        if (position >= length) return;
-    }
-}
-finally
-{
-    Finally(debug);
-}
+},
+fileArgument, portOption, debugOption);
+return rootCommand.Invoke(args);
