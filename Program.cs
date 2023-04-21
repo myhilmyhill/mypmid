@@ -4,6 +4,10 @@ using System.Text;
 
 [DllImport("winmm", CharSet = CharSet.Auto)]
 static extern int mciSendString(string lpstrCommand, StringBuilder? lpstrReturnString, int uReturnLength, IntPtr hwndCallback);
+[DllImport("winmm", CharSet = CharSet.Auto)]
+static extern int midiOutGetNumDevs();
+[DllImport("winmm", CharSet = CharSet.Auto)]
+static extern int midiOutGetDevCapsA(int uDeviceId, ref MIDIOUTCAPS lpCaps, int uSize);
 
 void SendMciVoid(string cmd, bool debug = false)
 {
@@ -26,7 +30,7 @@ T SendMci<T>(string cmd, bool debug = false)
     else if (typeof(T) == typeof(double)) ret = double.Parse(s);
     else if (typeof(T) == typeof(TimeSpan)) ret = TimeSpan.Parse(s);
     else throw new Exception($"not supported type: {typeof(T)}");
-
+ 
     return (T)ret;
 }
 
@@ -38,20 +42,38 @@ void Finally(bool debug = false)
 }
 
 var rootCommand = new RootCommand("My player for MIDI");
+var listOption = new Option<bool>(
+    name: "--list",
+    description: "Show all MIDI out devices");
+listOption.Arity = ArgumentArity.Zero;
 var fileArgument = new Argument<string>(
     name: "file",
-    description: "MIDI file");
+    description: "MIDI file",
+    getDefaultValue: () => "");
 var portOption = new Option<string?>(
     aliases: new[] { "--port", "-p" },
     description: "MIDI out port (default: mapper)");
 var debugOption = new Option<bool>(
     name: "--debug",
     description: "Show mciSendString");
+rootCommand.AddGlobalOption(listOption);
 rootCommand.AddArgument(fileArgument);
 rootCommand.AddOption(portOption);
 rootCommand.AddOption(debugOption);
-rootCommand.SetHandler((file, port, debug) =>
+rootCommand.SetHandler((file, port, debug, list) =>
 {
+    if (list)
+    {
+        int all = midiOutGetNumDevs();
+        for (int i = 0; i < all; i++)
+        {
+            MIDIOUTCAPS caps = new MIDIOUTCAPS();
+            midiOutGetDevCapsA(i, ref caps, Marshal.SizeOf(typeof(MIDIOUTCAPS)));
+            Console.WriteLine($"{i}: {caps.szPname}");
+        }
+        return;
+    }
+
     const string alias = "a";
     Console.CancelKeyPress += (_, _) =>
     {
@@ -80,11 +102,15 @@ rootCommand.SetHandler((file, port, debug) =>
             if (position >= length) return;
         }
     }
+    catch (Exception e)
+    {
+        Console.Error.WriteLine(e.Message);
+    }
     finally
     {
         Finally(debug);
     }
 
 },
-fileArgument, portOption, debugOption);
+fileArgument, portOption, debugOption, listOption);
 return rootCommand.Invoke(args);
