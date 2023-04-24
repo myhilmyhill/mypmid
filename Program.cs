@@ -14,19 +14,22 @@ var listOption = new Option<bool>(
 listOption.Arity = ArgumentArity.Zero;
 var fileArgument = new Argument<string>(
     name: "file",
-    description: "MIDI file",
-    getDefaultValue: () => "");
+    description: "MIDI file");
 var portOption = new Option<string?>(
     aliases: new[] { "--port", "-p" },
     description: "MIDI out port (default: mapper)");
+var mapOption = new Option<MidiMap?>(
+    aliases: new[] { "--map", "-m" },
+    description: "Inst map");
 var debugOption = new Option<bool>(
     name: "--debug",
     description: "Show mciSendString");
 rootCommand.AddGlobalOption(listOption);
 rootCommand.AddArgument(fileArgument);
 rootCommand.AddOption(portOption);
+rootCommand.AddOption(mapOption);
 rootCommand.AddOption(debugOption);
-rootCommand.SetHandler((file, port, debug, list) =>
+rootCommand.SetHandler((file, port, debug, list, map) =>
 {
     if (list)
     {
@@ -42,7 +45,12 @@ rootCommand.SetHandler((file, port, debug, list) =>
 
     try
     {
-        IPlayer player = new MciPlayer(file, port, debug);
+        IPlayer player = new ManagedMidiPlayer(file, port, debug);
+        if (map != null)
+        {
+            player.SetMap(map.Value);
+        }
+
         Console.CancelKeyPress += (_, _) =>
         {
             player.Finally();
@@ -66,5 +74,5 @@ rootCommand.SetHandler((file, port, debug, list) =>
         Console.Error.WriteLine(e.Message);
     }
 },
-fileArgument, portOption, debugOption, listOption);
+fileArgument, portOption, debugOption, listOption, mapOption);
 return rootCommand.Invoke(args);

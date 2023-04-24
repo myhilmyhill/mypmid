@@ -79,4 +79,9 @@ public class MciPlayer : IPlayer
 
         return (T)ret;
     }
+
+    public void SetMap(MidiMap map)
+    {
+        throw new NotImplementedException();
+    }
 }

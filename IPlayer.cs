@@ -1,4 +1,3 @@
-
 public interface IPlayer
 {
     /// <summary>
@@ -6,4 +5,5 @@ public interface IPlayer
     /// </summary>
     bool Play();
     void Finally();
+    void SetMap(MidiMap map);
 }
