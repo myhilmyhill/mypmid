@@ -1,4 +1,4 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -8,40 +8,57 @@ static extern int midiOutGetNumDevs();
 static extern int midiOutGetDevCapsA(int uDeviceId, ref MIDIOUTCAPS lpCaps, int uSize);
 
 var rootCommand = new RootCommand("My player for MIDI");
-var listOption = new Option<bool>(
-    name: "--list",
-    description: "Show all MIDI out devices");
-listOption.Arity = ArgumentArity.Zero;
-var fileArgument = new Argument<string>(
-    name: "file",
-    description: "MIDI file");
-var portOption = new Option<string?>(
-    aliases: new[] { "--port", "-p" },
-    description: "MIDI out port (default: mapper)");
-var mapOption = new Option<MidiMap?>(
-    aliases: new[] { "--map", "-m" },
-    description: "Inst map");
-var debugOption = new Option<bool>(
-    name: "--debug",
-    description: "Show mciSendString");
-rootCommand.AddGlobalOption(listOption);
-rootCommand.AddArgument(fileArgument);
-rootCommand.AddOption(portOption);
-rootCommand.AddOption(mapOption);
-rootCommand.AddOption(debugOption);
-rootCommand.SetHandler((file, port, debug, list, map) =>
+
+var listCommand = new Command("list", "Show all MIDI out devices");
+listCommand.Aliases.Add("--list");
+listCommand.SetAction(parseResult =>
 {
-    if (list)
+    int all = midiOutGetNumDevs();
+    for (int i = 0; i < all; i++)
     {
-        int all = midiOutGetNumDevs();
-        for (int i = 0; i < all; i++)
-        {
-            MIDIOUTCAPS caps = new MIDIOUTCAPS();
-            midiOutGetDevCapsA(i, ref caps, Marshal.SizeOf(typeof(MIDIOUTCAPS)));
-            Console.WriteLine($"{i}: {caps.szPname}");
-        }
-        return;
+        MIDIOUTCAPS caps = new MIDIOUTCAPS();
+        midiOutGetDevCapsA(i, ref caps, Marshal.SizeOf(typeof(MIDIOUTCAPS)));
+        Console.WriteLine($"{i}: {caps.szPname}");
     }
+    return 0;
+});
+
+var playCommand = new Command("play", "Play MIDI file");
+playCommand.Aliases.Add("p");
+
+var fileArgument = new Argument<string>("file")
+{
+    Description = "MIDI file"
+};
+
+var portOption = new Option<string?>("--port")
+{
+    Description = "MIDI out port (default: mapper)"
+};
+portOption.Aliases.Add("-p");
+
+var mapOption = new Option<MidiMap?>("--map")
+{
+    Description = "Inst map"
+};
+mapOption.Aliases.Add("-m");
+
+var debugOption = new Option<bool>("--debug")
+{
+    Description = "Show mciSendString"
+};
+
+playCommand.Arguments.Add(fileArgument);
+playCommand.Options.Add(portOption);
+playCommand.Options.Add(mapOption);
+playCommand.Options.Add(debugOption);
+
+playCommand.SetAction(parseResult =>
+{
+    string file = parseResult.GetValue(fileArgument)!;
+    string? port = parseResult.GetValue(portOption);
+    MidiMap? map = parseResult.GetValue(mapOption);
+    bool debug = parseResult.GetValue(debugOption);
 
     try
     {
@@ -72,7 +89,12 @@ rootCommand.SetHandler((file, port, debug, list, map) =>
     catch (Exception e)
     {
         Console.Error.WriteLine(e.Message);
+        return 1;
     }
-},
-fileArgument, portOption, debugOption, listOption, mapOption);
-return rootCommand.Invoke(args);
+    return 0;
+});
+
+rootCommand.Subcommands.Add(listCommand);
+rootCommand.Subcommands.Add(playCommand);
+
+return rootCommand.Parse(args).Invoke();
