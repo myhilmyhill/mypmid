@@ -13,8 +13,20 @@ public class ManagedMidiPlayer : IPlayer
     {
         this.debug = debug;
 
-        var access = MidiAccessManager.Default;
-        output = access.OpenOutputAsync(port ?? "0").Result;
+        if (port != null && (port.StartsWith("rtp://", StringComparison.OrdinalIgnoreCase) || port.Contains(':')))
+        {
+            var target = port.StartsWith("rtp://", StringComparison.OrdinalIgnoreCase) ? port.Substring(6) : port;
+            var parts = target.Split(':');
+            string host = parts[0];
+            int rtpPort = parts.Length > 1 ? int.Parse(parts[1]) : 5004;
+
+            output = new RtpMidiOutput(host, rtpPort);
+        }
+        else
+        {
+            var access = MidiAccessManager.Default;
+            output = access.OpenOutputAsync(port ?? "0").Result;
+        }
         Console.WriteLine($"{port}: {output.Details.Name}");
 
         var music = MidiMusic.Read(File.OpenRead(file));

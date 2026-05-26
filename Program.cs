@@ -33,7 +33,7 @@ var fileArgument = new Argument<string>("file")
 
 var portOption = new Option<string?>("--port")
 {
-    Description = "MIDI out port (default: mapper)"
+    Description = "MIDI out port (default: mapper) or RTP-MIDI address (e.g. rtp://192.168.1.100:5004)"
 };
 portOption.Aliases.Add("-p");
 
